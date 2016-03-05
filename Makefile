@@ -4,3 +4,6 @@ controller: controller.c net.c net.h
 	
 receiver: receiver.c sabertooth.c sabertooth.h net.c net.h
 	gcc -g receiver.c net.c -o receiver
+	
+jcmd: jcmd.c sabertooth.h
+	gcc -g jcmd.c -o jcmd

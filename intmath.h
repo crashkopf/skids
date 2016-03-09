@@ -36,7 +36,7 @@ int iadd (int augend, int addend, int lower, int upper) {
 	return (addend + augend);
 }
 // Subtract and limit the result
-inline
+static inline
 unsigned u_sublim (unsigned minuend, unsigned subtrahend, unsigned limit) {
 	unsigned x;
 	if (minuend < limit) return limit;			// Minuend must already be > limit
@@ -46,7 +46,7 @@ unsigned u_sublim (unsigned minuend, unsigned subtrahend, unsigned limit) {
 	else return limit;
 }
 // Add and limit the result
-inline
+static inline
 unsigned u_addlim (unsigned augend, unsigned addend, unsigned limit) {
 	unsigned x;
 	if (augend > limit) return limit;			// Augend must be < limit
@@ -57,7 +57,7 @@ unsigned u_addlim (unsigned augend, unsigned addend, unsigned limit) {
 	else return limit;	
 }
 // Subtract and limit the result
-inline
+static inline
 unsigned long ul_sublim (unsigned long minuend, unsigned long subtrahend, unsigned long limit) {
 	unsigned long x;
 	if (minuend < limit) return limit;			// Minuend must already be > limit
@@ -67,7 +67,7 @@ unsigned long ul_sublim (unsigned long minuend, unsigned long subtrahend, unsign
 	else return limit;
 }
 // Add and limit the result
-inline
+static inline
 unsigned long ul_addlim (unsigned long augend, unsigned long addend, unsigned long limit) {
 	unsigned long x;
 	if (augend > limit) return limit;			// Augend must be < limit

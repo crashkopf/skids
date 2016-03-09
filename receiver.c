@@ -183,7 +183,7 @@ int main (int argc, char * argv[]) {
 			}
 			if (!tv.tv_sec) {
 				tv.tv_usec = 200000; // Reset timeout
-				fprintf(stderr, "Setpoint %-12d Speed %-12d Output %-4d\r", pkt.value, j5getspeed(), (int8_t) iadd(j5getspeed() >> 23, 0, 0, 127));
+				fprintf(stderr, "Setpoint %-12d Speed %-12d Output %-4d\r", pkt.value, j5getspeed(), (int8_t) iadd(j5getspeed() >> 23, 0, 1, 127));
 			}
 		}
 		else {

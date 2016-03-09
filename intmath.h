@@ -31,6 +31,8 @@ int8_t int8_addlim (int8_t augend, int8_t addend, int8_t lower, int8_t upper) {
 }
 static inline
 int iadd (int augend, int addend, int lower, int upper) {
+	if (augend > upper) return upper;
+	if (augend < lower) return lower;
 	if ((addend > 0) && ((upper - addend) < augend)) return upper;
 	if ((addend < 0) && ((lower - addend) > augend)) return lower;
 	return (addend + augend);

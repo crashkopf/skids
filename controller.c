@@ -8,6 +8,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdint.h>
+#include <limits.h>
 #include <fcntl.h>
 #include <sys/select.h>
 #include <netinet/in.h>
@@ -33,7 +34,10 @@ int main (int argc, char * argv[]) {
 	unsigned char pbuf[32];
 	
 	struct input_event ievent;
-	int Xmin,Xmax,Ymin,Ymax;
+	int lastX, lastY;
+	int minX,maxX,minY,maxY;
+	int centerX, centerY;
+	double scaleX, scaleY;
 
 	//Process optional arguments
 	char optc;
@@ -59,6 +63,7 @@ int main (int argc, char * argv[]) {
 	}
 	
 	// Open our input device
+	//if ((inputfd = open(inputdev, O_RDONLY|O_NONBLOCK)) < 0) {
 	if ((inputfd = open(inputdev, O_RDONLY)) < 0) {
 		fprintf(stderr, "Failed to open device %s: %s\n", inputdev, strerror(errno));
 		exit(1);
@@ -72,6 +77,7 @@ int main (int argc, char * argv[]) {
 		fprintf(stderr, "Input device not supported\n");
         exit(1);
 	}
+	// Try to grab it
 	if (libevdev_grab(input, LIBEVDEV_GRAB)) {
 		fprintf(stderr, "Failed to grab input device\n");
 	}
@@ -81,22 +87,58 @@ int main (int argc, char * argv[]) {
 	
 	fprintf(stderr, "Opened input device %s\n", inputdev);
 	
+	// Figure out how to zero the axes
+	minX = libevdev_get_abs_minimum(input, ABS_X);
+	maxX = libevdev_get_abs_maximum(input, ABS_X);
+	minY = libevdev_get_abs_minimum(input, ABS_Y);
+	maxY = libevdev_get_abs_maximum(input, ABS_Y);
+	
+	centerX = ((maxX - minX) / 2) + minX;
+	centerY = ((maxY - minY) / 2) + minY;
+	
+	scaleX = ((double) INT_MAX) / ((double) (maxX - minX));
+	scaleY = ((double) INT_MAX) / ((double) (maxY - minY));
+	
+	libevdev_fetch_event_value(input, EV_ABS, ABS_X, &lastX);
+	lastX = (lastX - centerX) * scaleX;
+	libevdev_fetch_event_value(input, EV_ABS, ABS_Y, &lastY);
+	lastY = (lastY - centerY) * scaleY;
+	
+	fprintf(stderr, "X axis - min %d, max %d, range %d, center %d, scale %f\n", minX, maxX, (maxX - minX), centerX, scaleX);
+	fprintf(stderr, "Y axis - min %d, max %d, range %d, center %d, scale %f\n", minY, maxY, (maxY - minY), centerY, scaleY);
+	
 	// Get ourselves a socket
 	socketfd = get_socket(host, port);
 	
 	fprintf(stderr, "Opened socket to %s:%s\n", host, port);
 
+	fprintf(stderr, "X: %-012d Y: %-012d\r", lastX, lastY);
+
 	// Main event loop begins here
 	for(;;) {
-		status = libevdev_next_event(input, LIBEVDEV_READ_FLAG_NORMAL, &ievent);
+		status = libevdev_next_event(input, LIBEVDEV_READ_FLAG_NORMAL|LIBEVDEV_READ_FLAG_BLOCKING, &ievent);
 		switch (status) {
-			case 0:
-				pack(pbuf, ievent.code, ievent.value);
-				//fprintf(stderr, "%u:%li", pkt.command, pkt.value);
-				socksent = send(socketfd, pbuf, 6, 0);
+			case LIBEVDEV_READ_STATUS_SUCCESS:
+				if (ievent.type == EV_ABS) {
+					switch (ievent.code) {
+						case ABS_Y:
+							lastY = (ievent.value - centerY) * scaleY;
+							break;
+						case ABS_X:
+							lastX = (ievent.value - centerX) * scaleX;
+							break;
+						default:
+							break;
+					}
+				}
+				fprintf(stderr, "X: %-12d Y: %-12d\r", lastX, lastY);
+				
+				//pack(pbuf, 0, lastY-128);
+				//socksent = send(socketfd, pbuf, 6, 0);
 				break;
-			case 1:
+			case LIBEVDEV_READ_STATUS_SYNC:
 				// SYN dropped
+				fprintf(stderr, "SYN_DROPPED!");
 				break;
 			case -EAGAIN:
 				break;

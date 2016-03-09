@@ -10,16 +10,22 @@
 #include <ctype.h>
 #include <stdint.h>
 #include <fcntl.h>
-#include <termios.h>
+#include <termios.h> // Serial settings
 #include <sys/select.h>
+
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netdb.h>
-#include <arpa/inet.h>
+#include <netdb.h> // gethostaddr()
+#include <arpa/inet.h> 
+
+#include <signal.h>
+#include <time.h>
 
 #include "intmath.h"
 #include "sabertooth.h"
 #include "net.h"
+#include "control.h"
+#include "timer.h"
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
@@ -35,27 +41,32 @@ int main (int argc, char * argv[]) {
 
 	int done = 0;
 	int status;
-	
+	int ready;
+	int rv;
+
 	int socketfd = 0;
 	char port[6] = "9000";
 	struct addrinfo hints;
 	struct addrinfo *servinfo, *p;
 	int socketread;
-    char socketbuf[128];
-	
-	struct packet pkt;
-	
+	char socketbuf[128];
+
+	struct packet pkt = {0, 0};
+
 	int ttyfd = -1;
-	unsigned uartspd = 38400;
+	unsigned uartspd = 9600;
 	struct termios ttycfg;
-	char ttydev[64] = "/dev/ttyS0";
-	
-	int32_t speed = 0; // positive is Forward
-	int32_t turn = 0;  // positive is to the right
-	
+	char ttydev[64] = "/dev/ttyUSB0";
+
+	st_packet stp;
+	int8_t st = ST_START;
+
+	fd_set readfds;
+	fd_set writefds;
+
 	// Process optional arguments
 	char optc;
-	
+
 	while ((optc = getopt (argc, argv, "p:t:s:")) != -1) {
     switch (optc)
 		{
@@ -89,14 +100,14 @@ int main (int argc, char * argv[]) {
 		fprintf(stderr, "Can't get attributes for device %s: %s\n", ttydev, strerror(errno));
 		exit(1);
 	}
-	cfsetospeed(&ttycfg,B38400);
-	cfsetispeed(&ttycfg,B38400);
+	cfsetospeed(&ttycfg,B9600);
+	cfsetispeed(&ttycfg,B9600);
 	cfmakeraw(&ttycfg);
 	if(tcsetattr(ttyfd,TCSAFLUSH,&ttycfg) < 0) {
 		fprintf(stderr, "Can't set attributes for device \"%s\": %s\n", ttydev, strerror(errno));
 		exit(1);
 	}
-	
+
 	// Open listening socket (shamelessly stolen from Beej's network programming guide
 	memset(&hints, 0, sizeof hints); // make sure the struct is empty
 	hints.ai_family = AF_UNSPEC;     // don't care IPv4 or IPv6
@@ -120,28 +131,29 @@ int main (int argc, char * argv[]) {
             fprintf(stderr, "Bind error: %s\n", strerror(errno));
             continue;
         }
-
         break;
     }
-	
+
     if (p == NULL) {
         fprintf(stderr, "Failed to bind socket\n");
         exit(2);
     }
 
     freeaddrinfo(servinfo);
-	
+
 	// Print status
 	fprintf(stderr, "Listen port: %s, Output tty: %s, Serial speed: %u\n", port, ttydev, uartspd);
+
+	// Create a signal handler for timeout
+	
+	
+	// Set up timer
+	if (timer_init() < 0) exit(1);
+	if (timer_start() < 0) exit(1);
+	
+
 	
 	// Main event loop begins here
-
-	fd_set readfds;
-	fd_set writefds;
-	
-	int ready;
-
-	struct timeval tv;
 	while (!done) {
 		FD_ZERO(&readfds);
 		FD_SET(socketfd, &readfds);
@@ -149,50 +161,35 @@ int main (int argc, char * argv[]) {
 		FD_ZERO(&writefds);
 		FD_SET(ttyfd, &writefds);
 		
-		tv.tv_sec  = 0;
-		tv.tv_usec = 100;
-		
-		ready = select(FD_SETSIZE, &readfds, NULL, NULL, &tv);
-		switch(ready) {
-			case -1:
-				perror("select");
-				done = 1;
-			break;
-			case 0:
-			default:
-				break;
+		if (select(FD_SETSIZE, &readfds, NULL, NULL, NULL) == -1 && errno != EINTR) {
+			fprintf(stderr, "select() error: %s\n", strerror(errno));
+			exit(1);
 		}
 
 		if (FD_ISSET(socketfd, &readfds)) {
-			socketread = recvfrom(socketfd, socketbuf, sizeof(socketbuf), 0, NULL, NULL);
-			if (socketread < 0) {
+			if((rv = recvfrom(socketfd, socketbuf, sizeof(socketbuf), 0, NULL, 0)) == -1  && errno != EINTR) {
 				fprintf(stderr, "Failed to read from socket: %s\n", strerror(errno));
+				exit(1);
 			}
 			unpack(socketbuf, &pkt.command, &pkt.value);
-			fprintf(stderr, "(%d) %04X:%08lX\n", socketread, pkt.command, pkt.value);
-			
-			fprintf(stderr, "Received packet %d bytes long\n", socketread);
-			for (int i = 0; i < socketread; i++) {
-				fprintf(stderr, " %02hhX", socketbuf[i]);
+			switch (pkt.command) {
+				case 0:
+					j5setspeed(pkt.value);
+					break;
+				case 1:
+					break;
+				default:
+					break;
 			}
-			fputs("\n", stderr);
-			for (int i = 0; i < socketread; i++) {
-				if (isprint(socketbuf[i]))
-					fprintf(stderr, " % 2c", socketbuf[i]);
-				else 
-					fputs(" ..", stderr);
-			}
-			fputs("\n\n", stderr);
-			
+			//if (FD_ISSET(ttyfd, &writefds)) {
+
+			//}
 		}
-		
-		if (FD_ISSET(ttyfd, &writefds)) {
-			
+		if (j5ready()) {
+			stp = st_command(0, ST_FWD_B, (int8_t) j5getspeed());
+			if ((write(ttyfd, &st, 1) == -1) && errno != EINTR) exit(1);  // Send synchronization byte
+			if ((write(ttyfd, &stp, 4) == -1) && errno != EINTR) exit(1);;
+			fprintf(stderr, "Setpoint %-7d Speed %-7d\r", pkt.value, j5getspeed());	
 		}
-		
-		
 	}
-	// Clean-up code
-
-
 }

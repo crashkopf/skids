@@ -10,9 +10,6 @@
 
 #include "sabertooth.h"
 
-#define xstr(s) str(s)
-#define str(s) #s
-
 int main (int argc, char * argv[]) {
 	
 	int8_t cmd = ST_FWD_B;

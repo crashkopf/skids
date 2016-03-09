@@ -24,7 +24,7 @@ volatile int speedact = 0;
 volatile int turnsp = 0;  // positive is to the right
 volatile int turnact = 0;
 volatile int ready = 0;
-int slew = 1;
+int slew = 143165576;
 
 void j5setspeed(int sp) {
 	DOATOMIC(speedsp = sp);

@@ -63,6 +63,7 @@ int main (int argc, char * argv[]) {
 
 	fd_set readfds;
 	fd_set writefds;
+	struct timeval tv= {0, 0};
 
 	// Process optional arguments
 	char optc;
@@ -143,15 +144,10 @@ int main (int argc, char * argv[]) {
 
 	// Print status
 	fprintf(stderr, "Listen port: %s, Output tty: %s, Serial speed: %u\n", port, ttydev, uartspd);
-
-	// Create a signal handler for timeout
-	
 	
 	// Set up timer
 	if (timer_init() < 0) exit(1);
 	if (timer_start() < 0) exit(1);
-	
-
 	
 	// Main event loop begins here
 	while (!done) {
@@ -161,35 +157,40 @@ int main (int argc, char * argv[]) {
 		FD_ZERO(&writefds);
 		FD_SET(ttyfd, &writefds);
 		
-		if (select(FD_SETSIZE, &readfds, NULL, NULL, NULL) == -1 && errno != EINTR) {
-			fprintf(stderr, "select() error: %s\n", strerror(errno));
-			exit(1);
+		rv = select(FD_SETSIZE, &readfds, NULL, NULL, &tv);
+		
+		if (rv >= 0) {
+			if (FD_ISSET(socketfd, &readfds)) {
+				if((rv = recvfrom(socketfd, socketbuf, sizeof(socketbuf), 0, NULL, 0)) == -1  && errno != EINTR) {
+					fprintf(stderr, "Failed to read from socket: %s\n", strerror(errno));
+					exit(1);
+				}
+				unpack(socketbuf, &pkt.command, &pkt.value);
+				switch (pkt.command) {
+					case 0:
+						j5setspeed(pkt.value);
+						break;
+					case 1:
+						break;
+					default:
+						break;
+				}
+			}
+			if (FD_ISSET(ttyfd, &writefds)) {
+				stp = st_command(0, ST_FWD_B, (int8_t) (j5getspeed() >> 23));
+				if ((write(ttyfd, &st, 1) == -1) && errno != EINTR) exit(1);  // Send synchronization byte
+				if ((write(ttyfd, &stp, 4) == -1) && errno != EINTR) exit(1);
+			}
+			if (!tv.tv_sec) {
+				tv.tv_usec = 200000; // Reset timeout
+				fprintf(stderr, "Setpoint %-12d Speed %-12d Output %-4d\r", pkt.value, j5getspeed(), j5getspeed()>>23);
+			}
 		}
-
-		if (FD_ISSET(socketfd, &readfds)) {
-			if((rv = recvfrom(socketfd, socketbuf, sizeof(socketbuf), 0, NULL, 0)) == -1  && errno != EINTR) {
-				fprintf(stderr, "Failed to read from socket: %s\n", strerror(errno));
+		else {
+			if (errno != EINTR) {
+				fprintf(stderr, "select() error: %s\n", strerror(errno));
 				exit(1);
 			}
-			unpack(socketbuf, &pkt.command, &pkt.value);
-			switch (pkt.command) {
-				case 0:
-					j5setspeed(pkt.value);
-					break;
-				case 1:
-					break;
-				default:
-					break;
-			}
-			//if (FD_ISSET(ttyfd, &writefds)) {
-
-			//}
-		}
-		if (j5ready()) {
-			stp = st_command(0, ST_FWD_B, (int8_t) j5getspeed());
-			if ((write(ttyfd, &st, 1) == -1) && errno != EINTR) exit(1);  // Send synchronization byte
-			if ((write(ttyfd, &stp, 4) == -1) && errno != EINTR) exit(1);;
-			fprintf(stderr, "Setpoint %-7d Speed %-7d\r", pkt.value, j5getspeed());	
 		}
 	}
 }

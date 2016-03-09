@@ -133,8 +133,8 @@ int main (int argc, char * argv[]) {
 				}
 				fprintf(stderr, "X: %-12d Y: %-12d\r", lastX, lastY);
 				
-				//pack(pbuf, 0, lastY-128);
-				//socksent = send(socketfd, pbuf, 6, 0);
+				pack(pbuf, 0, lastY);
+				socksent = send(socketfd, pbuf, 6, 0);
 				break;
 			case LIBEVDEV_READ_STATUS_SYNC:
 				// SYN dropped

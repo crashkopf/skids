@@ -32,10 +32,10 @@ int timer_init(void) {
 }
 
 int timer_start(void) {
-	its.it_value.tv_sec = 1;
-	its.it_value.tv_nsec = 0;//100000;
-	its.it_interval.tv_sec = 1;
-	its.it_interval.tv_nsec = 0;//100000; // 100mS
+	its.it_value.tv_sec = 0;
+	its.it_value.tv_nsec = 100000;
+	its.it_interval.tv_sec = 0;
+	its.it_interval.tv_nsec = 100000; // 100mS
 	
 	if (timer_settime(timerid, 0, &its, NULL) == -1)
 		return -1;

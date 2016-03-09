@@ -177,13 +177,13 @@ int main (int argc, char * argv[]) {
 				}
 			}
 			if (FD_ISSET(ttyfd, &writefds)) {
-				stp = st_command(0, ST_FWD_B, (int8_t) (j5getspeed() >> 23));
+				stp = st_command(0, ST_FWD_B, (int8_t) iadd(j5getspeed() >> 23, 0, 0, 127));
 				if ((write(ttyfd, &st, 1) == -1) && errno != EINTR) exit(1);  // Send synchronization byte
 				if ((write(ttyfd, &stp, 4) == -1) && errno != EINTR) exit(1);
 			}
 			if (!tv.tv_sec) {
 				tv.tv_usec = 200000; // Reset timeout
-				fprintf(stderr, "Setpoint %-12d Speed %-12d Output %-4d\r", pkt.value, j5getspeed(), j5getspeed()>>23);
+				fprintf(stderr, "Setpoint %-12d Speed %-12d Output %-4d\r", pkt.value, j5getspeed(), (int8_t) iadd(j5getspeed() >> 23, 0, 0, 127));
 			}
 		}
 		else {

@@ -54,7 +54,7 @@ int main (int argc, char * argv[]) {
 	struct packet pkt = {0, 0};
 
 	int ttyfd = -1;
-	unsigned uartspd = 9600;
+	unsigned uartspd = B9600;
 	struct termios ttycfg;
 	char ttydev[64] = "/dev/ttyUSB0";
 
@@ -80,7 +80,21 @@ int main (int argc, char * argv[]) {
 			ttydev[sizeof(ttydev) - 1] = 0;
 			break;
 		case 's':
-			//uartspd = atoi(optarg);
+			// (*@&$@ baud rates are enumerated...
+			switch (atoi(optarg)) {
+				case 9600:
+					uartspd = B9600;
+					break;
+				case 19200:
+					uartspd = B19200;
+					break;
+				case 38400:
+					uartspd = B38400;
+					break;
+				default:
+					fprintf(stderr, "Baud rate not supported\n");
+					exit(1);
+			}
 			break;
 		default:
 			exit(1);
@@ -101,8 +115,8 @@ int main (int argc, char * argv[]) {
 		fprintf(stderr, "Can't get attributes for device %s: %s\n", ttydev, strerror(errno));
 		exit(1);
 	}
-	cfsetospeed(&ttycfg,B9600);
-	cfsetispeed(&ttycfg,B9600);
+	cfsetospeed(&ttycfg,uartspd);
+	cfsetispeed(&ttycfg,uartspd);
 	cfmakeraw(&ttycfg);
 	if(tcsetattr(ttyfd,TCSAFLUSH,&ttycfg) < 0) {
 		fprintf(stderr, "Can't set attributes for device \"%s\": %s\n", ttydev, strerror(errno));
@@ -143,7 +157,7 @@ int main (int argc, char * argv[]) {
     freeaddrinfo(servinfo);
 
 	// Print status
-	fprintf(stderr, "Listen port: %s, Output tty: %s, Serial speed: %u\n", port, ttydev, uartspd);
+	fprintf(stderr, "Listen port: %s, Output tty: %s, Serial speed: %u\n", port, ttydev, cfgetospeed(&ttycfg));
 	
 	// Set up timer
 	if (timer_init() < 0) exit(1);

@@ -10,6 +10,10 @@
 #define ST_REV_A (0x01)
 #define ST_FWD_B (0x04)
 #define ST_REV_B (0x05)
+#define ST_DRV_FWD (0x08)
+#define ST_DRV_REV (0x09)
+#define ST_TRN_RHT (0x0a)
+#define ST_TRN_LFT (0x0b)
 
 typedef struct {
 	uint8_t addr;

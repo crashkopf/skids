@@ -64,6 +64,8 @@ int main (int argc, char * argv[]) {
 	fd_set readfds;
 	fd_set writefds;
 	struct timeval tv= {0, 0};
+	
+	int8_t turn, speed;
 
 	// Process optional arguments
 	char optc;
@@ -185,19 +187,39 @@ int main (int argc, char * argv[]) {
 						j5setspeed(pkt.value);
 						break;
 					case 1:
+						j5setturn(pkt.value);
 						break;
 					default:
 						break;
 				}
 			}
 			if (FD_ISSET(ttyfd, &writefds)) {
-				stp = st_command(0, ST_FWD_B, (int8_t) iadd(j5getspeed() >> 23, 0, 0, 127));
-				if ((write(ttyfd, &st, 1) == -1) && errno != EINTR) exit(1);  // Send synchronization byte
-				if ((write(ttyfd, &stp, 4) == -1) && errno != EINTR) exit(1);
+				turn = (int8_t) iadd(j5getturn() >> 23, 0, -127, 127);
+				speed = (int8_t) iadd(j5getspeed() >> 23, 0, -127, 127);
+				
+				// Send synchronization byte
+				if ((write(ttyfd, &st, 1) == -1) && errno != EINTR) {fprintf(stderr, "Write sync error: %s\n", strerror(errno)); exit(1);}
+				
+				if (speed > 0) {
+					stp = st_command(0, ST_DRV_FWD, speed);
+					if ((write(ttyfd, &stp, 4) == -1) && errno != EINTR) {fprintf(stderr, "Write error: %s\n", strerror(errno)); exit(1);}
+				}
+				if (speed < 0) {
+					stp = st_command(0, ST_DRV_REV, -speed);
+					if ((write(ttyfd, &stp, 4) == -1) && errno != EINTR) {fprintf(stderr, "Write error: %s\n", strerror(errno)); exit(1);}
+				}
+				if (turn > 0) {
+					stp = st_command(0, ST_TRN_RHT, turn);
+					if ((write(ttyfd, &stp, 4) == -1) && errno != EINTR) {fprintf(stderr, "Write error: %s\n", strerror(errno)); exit(1);}
+				}
+				if (turn < 0) {
+					stp = st_command(0, ST_TRN_LFT, -turn);
+					if ((write(ttyfd, &stp, 4) == -1) && errno != EINTR) {fprintf(stderr, "Write error: %s\n", strerror(errno)); exit(1);}
+				}
 			}
 			if (!tv.tv_sec) {
 				tv.tv_usec = 200000; // Reset timeout
-				fprintf(stderr, "Setpoint %-12d Speed %-12d Output %-4d\r", pkt.value, j5getspeed(), (int8_t) iadd(j5getspeed() >> 23, 0, 1, 127));
+				fprintf(stderr, "Speed %-4d Turn %-4d\r", speed, turn);
 			}
 		}
 		else {

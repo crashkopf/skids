@@ -135,6 +135,8 @@ int main (int argc, char * argv[]) {
 				
 				pack(pbuf, 0, lastY);
 				socksent = send(socketfd, pbuf, 6, 0);
+				pack(pbuf, 1, lastX);
+				socksent = send(socketfd, pbuf, 6, 0);
 				break;
 			case LIBEVDEV_READ_STATUS_SYNC:
 				// SYN dropped

@@ -39,18 +39,16 @@ void *get_in_addr(struct sockaddr *sa)
 
 int main (int argc, char * argv[]) {
 
-	int done = 0;
-	int status;
-	int ready;
 	int rv;
+	char buf[128];
+	unsigned off;
 
 	int socketfd = 0;
 	char port[6] = "9000";
 	struct addrinfo hints;
 	struct addrinfo *servinfo, *p;
 	int socketread;
-	char socketbuf[128];
-
+	
 	struct packet pkt = {0, 0};
 
 	int ttyfd = -1;
@@ -131,8 +129,8 @@ int main (int argc, char * argv[]) {
 	hints.ai_socktype = SOCK_DGRAM; // TCP stream sockets
 	hints.ai_flags = AI_PASSIVE;     // fill in my IP for me
 
-	if ((status = getaddrinfo(NULL, port, &hints, &servinfo)) != 0) {
-		fprintf(stderr, "getaddrinfo() error: %s\n", gai_strerror(status));
+	if ((rv = getaddrinfo(NULL, port, &hints, &servinfo)) != 0) {
+		fprintf(stderr, "getaddrinfo() error: %s\n", gai_strerror(rv));
 		exit(1);
 	}
 	// loop through all the results and bind to the first we can
@@ -166,22 +164,22 @@ int main (int argc, char * argv[]) {
 	if (timer_start() < 0) exit(1);
 	
 	// Main event loop begins here
-	while (!done) {
+	for(;;) {
 		FD_ZERO(&readfds);
 		FD_SET(socketfd, &readfds);
 	
 		FD_ZERO(&writefds);
 		FD_SET(ttyfd, &writefds);
 		
-		rv = select(FD_SETSIZE, &readfds, NULL, NULL, &tv);
+		rv = select(FD_SETSIZE, &readfds, &writefds, NULL, &tv);
 		
 		if (rv >= 0) {
 			if (FD_ISSET(socketfd, &readfds)) {
-				if((rv = recvfrom(socketfd, socketbuf, sizeof(socketbuf), 0, NULL, 0)) == -1  && errno != EINTR) {
+				if((rv = recvfrom(socketfd, buf, sizeof(buf), 0, NULL, 0)) == -1  && errno != EINTR) {
 					fprintf(stderr, "Failed to read from socket: %s\n", strerror(errno));
 					exit(1);
 				}
-				unpack(socketbuf, &pkt.command, &pkt.value);
+				unpack(buf, &pkt.command, &pkt.value);
 				switch (pkt.command) {
 					case 0:
 						j5setspeed(pkt.value);
@@ -197,24 +195,29 @@ int main (int argc, char * argv[]) {
 				turn = (int8_t) iadd(j5getturn() >> 23, 0, -127, 127);
 				speed = (int8_t) iadd(j5getspeed() >> 23, 0, -127, 127);
 				
-				// Send synchronization byte
-				if ((write(ttyfd, &st, 1) == -1) && errno != EINTR) {fprintf(stderr, "Write sync error: %s\n", strerror(errno)); exit(1);}
+				off = 0;
+				// Synchronization byte
+				buf[off++] = ST_START;
 				
-				if (speed > 0) {
-					stp = st_command(0, ST_DRV_FWD, speed);
-					if ((write(ttyfd, &stp, 4) == -1) && errno != EINTR) {fprintf(stderr, "Write error: %s\n", strerror(errno)); exit(1);}
-				}
-				if (speed < 0) {
-					stp = st_command(0, ST_DRV_REV, -speed);
-					if ((write(ttyfd, &stp, 4) == -1) && errno != EINTR) {fprintf(stderr, "Write error: %s\n", strerror(errno)); exit(1);}
-				}
-				if (turn > 0) {
-					stp = st_command(0, ST_TRN_RHT, turn);
-					if ((write(ttyfd, &stp, 4) == -1) && errno != EINTR) {fprintf(stderr, "Write error: %s\n", strerror(errno)); exit(1);}
-				}
-				if (turn < 0) {
-					stp = st_command(0, ST_TRN_LFT, -turn);
-					if ((write(ttyfd, &stp, 4) == -1) && errno != EINTR) {fprintf(stderr, "Write error: %s\n", strerror(errno)); exit(1);}
+				if (speed >= 0) off += st_command(&buf[off], 0, ST_DRV_FWD, speed);
+				if (speed < 0) off += st_command(&buf[off], 0, ST_DRV_REV, -speed);
+				if (turn >= 0) off += st_command(&buf[off], 0, ST_TRN_RHT, turn);
+				if (turn < 0) off += st_command(&buf[off], 0, ST_TRN_LFT, -turn);
+				
+				rv = write(ttyfd, &buf, off);
+				if (rv == -1) {
+					switch (errno) {
+						case EINTR:
+							// This only gets set if no data was written, so it's safe to ignore it.
+							break;
+						case EAGAIN:
+						//case EWOULDBLOCK:
+							// We don't actually handle these, which may not necessarily be a problem...
+							break;
+						default:
+							fprintf(stderr, "Write error: %s\n", strerror(errno)); 
+							exit(1);
+					}
 				}
 			}
 			if (!tv.tv_sec) {

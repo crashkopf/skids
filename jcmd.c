@@ -11,16 +11,16 @@
 #include "sabertooth.h"
 
 int main (int argc, char * argv[]) {
+	int8_t cmd, val = 0;
+	int off = 0;
 	
-	int8_t cmd = ST_FWD_B;
-	int8_t val = 0;
-	int8_t st = ST_START;
+	unsigned char buf[32];
 	
-	st_packet p;
+	if (argv[1]) cmd = strtol(argv[1], NULL, 0);
+	if (argv[2]) val = strtol(argv[2], NULL, 0);
 	
-	if (argv[1]) val = atoi(argv[1]);
+	buf[off++] = ST_START;
+	off += st_command(&buf[1], 0, cmd, val);
 	
-	write(STDOUT_FILENO, &st, 1);
-	p = st_command(0, cmd, val);
-	write(STDOUT_FILENO, &p, 4);
+	write(STDOUT_FILENO, &buf, off);
 }

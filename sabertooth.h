@@ -26,11 +26,12 @@ typedef struct {
 	This function builds a command packet
 	Use static inline function instead of a macro to guarantee type
 */
-static inline st_packet st_command (uint8_t addr, uint8_t cmd, uint8_t data ) {
-	st_packet p;
-	p.addr = addr | ST_ADDR_OFFSET;
-	p.cmd = cmd;
-	p.data = data & ST_DRIVE_MASK;
-	p.chksum = (p.addr + p.cmd + p.data) & ST_CHKSUM_MASK;
-	return p;
+static inline
+int st_command (void * b, uint8_t addr, uint8_t cmd, uint8_t data) {
+	((st_packet *) b)->addr = addr | ST_ADDR_OFFSET;
+	((st_packet *) b)->cmd = cmd;
+	((st_packet *) b)->data = data & ST_DRIVE_MASK;
+	((st_packet *) b)->chksum = (addr + cmd + data) & ST_CHKSUM_MASK;
+	
+	return sizeof(st_packet);
 }

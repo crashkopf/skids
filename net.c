@@ -46,17 +46,3 @@ int get_socket (char * host, char * port) {
 	}
 	return fd;
 }
-
-void pack (unsigned char *b, uint16_t c, int32_t v) {
-	c = htons(c);
-	memcpy(&b[PKT_CMD], &c, sizeof(c));
-	v = htonl(v);
-	memcpy(&b[PKT_VAL], &v, sizeof(v));
-}
-
-void unpack (unsigned char *b, uint16_t *c, int32_t *v) {
-	memcpy(c, &b[PKT_CMD], sizeof(uint16_t));
-	*c = ntohs(*c);
-	memcpy(v, &b[PKT_VAL], sizeof(int32_t));
-	*v = ntohl(*v);
-}

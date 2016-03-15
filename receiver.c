@@ -15,8 +15,6 @@
 
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netdb.h> // gethostaddr()
-#include <arpa/inet.h> 
 
 #include <signal.h>
 #include <time.h>
@@ -27,16 +25,6 @@
 #include "control.h"
 #include "timer.h"
 
-// get sockaddr, IPv4 or IPv6:
-void *get_in_addr(struct sockaddr *sa)
-{
-    if (sa->sa_family == AF_INET) {
-        return &(((struct sockaddr_in*)sa)->sin_addr);
-    }
-
-    return &(((struct sockaddr_in6*)sa)->sin6_addr);
-}
-
 int main (int argc, char * argv[]) {
 
 	int rv;
@@ -44,9 +32,7 @@ int main (int argc, char * argv[]) {
 	unsigned off;
 
 	int socketfd = 0;
-	char port[6] = "9000";
-	struct addrinfo hints;
-	struct addrinfo *servinfo, *p;
+	struct sockaddr_in socketaddr;
 	int socketread;
 	
 	struct packet pkt = {0, 0};
@@ -56,15 +42,16 @@ int main (int argc, char * argv[]) {
 	struct termios ttycfg;
 	char ttydev[64] = "/dev/ttyUSB0";
 
-	st_packet stp;
-	int8_t st = ST_START;
-
 	fd_set readfds;
 	fd_set writefds;
 	struct timeval tv= {0, 0};
 	
 	int8_t turn, speed;
 
+	socketaddr.sin_family = AF_INET;
+	socketaddr.sin_port = htons(9000);
+	socketaddr.sin_addr.s_addr = 0;
+	
 	// Process optional arguments
 	char optc;
 
@@ -72,8 +59,9 @@ int main (int argc, char * argv[]) {
     switch (optc)
 		{
 		case 'p':
-			strncpy(port, optarg, sizeof(port));
-			port[sizeof(port) - 1] = 0;
+			socketaddr.sin_port = htons(atoi(optarg));
+			//strncpy(port, optarg, sizeof(port));
+			//port[sizeof(port) - 1] = 0;
 			break;
 		case 't':
 			strncpy(ttydev, optarg, sizeof(ttydev));
@@ -123,41 +111,19 @@ int main (int argc, char * argv[]) {
 		exit(1);
 	}
 
-	// Open listening socket (shamelessly stolen from Beej's network programming guide
-	memset(&hints, 0, sizeof hints); // make sure the struct is empty
-	hints.ai_family = AF_UNSPEC;     // don't care IPv4 or IPv6
-	hints.ai_socktype = SOCK_DGRAM; // TCP stream sockets
-	hints.ai_flags = AI_PASSIVE;     // fill in my IP for me
-
-	if ((rv = getaddrinfo(NULL, port, &hints, &servinfo)) != 0) {
-		fprintf(stderr, "getaddrinfo() error: %s\n", gai_strerror(rv));
+	// Gett a listening datagram socket
+	if ((socketfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+		fprintf(stderr, "Socket error: %s\n", strerror(errno));
 		exit(1);
 	}
-	// loop through all the results and bind to the first we can
-    for(p = servinfo; p != NULL; p = p->ai_next) {
-        if ((socketfd = socket(p->ai_family, p->ai_socktype,
-                p->ai_protocol)) == -1) {
-            fprintf(stderr, "Socket error: %s\n", strerror(errno));
-            continue;
-        }
 
-        if (bind(socketfd, p->ai_addr, p->ai_addrlen) == -1) {
-            close(socketfd);
-            fprintf(stderr, "Bind error: %s\n", strerror(errno));
-            continue;
-        }
-        break;
-    }
-
-    if (p == NULL) {
-        fprintf(stderr, "Failed to bind socket\n");
-        exit(2);
-    }
-
-    freeaddrinfo(servinfo);
+	if (bind(socketfd, (struct sockaddr *) &socketaddr, sizeof(socketaddr)) == -1) {
+		fprintf(stderr, "Bind error: %s\n", strerror(errno));
+		exit(1);
+	}
 
 	// Print status
-	fprintf(stderr, "Listen port: %s, Output tty: %s, Serial speed: %u\n", port, ttydev, cfgetospeed(&ttycfg));
+	fprintf(stderr, "Listen port: %d, Output tty: %s, Serial speed: %u\n", ntohs(socketaddr.sin_port), ttydev, cfgetospeed(&ttycfg));
 	
 	// Set up timer
 	if (timer_init() < 0) exit(1);

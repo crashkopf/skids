@@ -3,10 +3,8 @@
 */
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <unistd.h>
 #include <stdint.h>
-#include <sys/select.h>
 
 #include "sabertooth.h"
 

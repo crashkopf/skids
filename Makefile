@@ -1,4 +1,3 @@
-# `pkg-config --cflags --libs gtk+-3.0` 
 
 all: controller receiver jcmd
 
@@ -10,3 +9,6 @@ receiver: receiver.c control.c control.h sabertooth.h net.c net.h timer.c timer.
 	
 jcmd: jcmd.c sabertooth.h
 	gcc -g jcmd.c -o jcmd
+
+clean:
+	rm controller receiver jcmd

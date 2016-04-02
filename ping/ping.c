@@ -14,9 +14,9 @@
 
 timer_s forward;
 timer_s down;
-timer_s t;
 
-unsigned char levels;
+volatile unsigned char levels;
+volatile int pung;
 
 FILE sio;
 
@@ -34,6 +34,7 @@ ISR(PCINT0_vect) {
 		else {
 			// Input is low, so stop the timer
 			timer_stop(&forward);
+			pung =1;
 		}
 	}
 	
@@ -47,6 +48,7 @@ ISR(PCINT0_vect) {
 		else {
 			// Input is low, so stop the timer
 			timer_stop(&down);
+			pung = 1;
 		}
 	}
 }
@@ -54,7 +56,6 @@ ISR(PCINT0_vect) {
 static int sio_putc(char c, FILE *stream) {SIO_write(&c, 1);}
 
 static int sio_getc(FILE *stream) {char c; SIO_read(&c, 1); return c;}
-
 
 void main (void) {
 	// Enable sleep mode
@@ -71,29 +72,33 @@ void main (void) {
 	stdout = &sio;
 	
 	// Print the banner
-	printf_P(PSTR("PEMS Autonomus Car Project - Sensor Control v0.1\n"));
+	printf_P(PSTR("# PEMS Autonomus Car Project - Rangefinder Test v0.1\n"));
 	
 	// Set up timers
 	timer_init(50);
-	timer_set(&t, 0);
-	timer_start(&t);
 	
 	forward.direction = 1;
 	down.direction = 1;
 
+	// Pin change interrupt enable
 	PCICR |= _BV(PCIE0);
-	PCMSK0 |= _BV(PCINT0);
+	PCMSK0 |= _BV(PCINT0) | _BV(PCINT1);
 	
 	// Turn on blinky light pin
 	DDRB |= _BV(DDB5);
 	PORTB |= _BV(PB5);
 	
+	// Print header row
+	printf_P(PSTR("Forward, Down\n"));
+	
 	for(;;) {
-		if (timer_read(&t) == 0) {
-			timer_set(&t, 1000000);
-			PORTB ^= _BV(PB5);
-			printf_P(PSTR("F%03u D%03u\n"), timer_read(&forward) / 147, timer_read(&down));
+		if (pung) {
+			// Had to break this into two statements because of some wierd printf() bug
+			printf_P(PSTR("% 3u,"), timer_read(&forward) / 147);
+			printf_P(PSTR("% 3u\n"), timer_read(&down) / 147);
+			pung = 0;
+			PORTB ^= _BV(PB5);  // Blink!
 		}
-		sleep_cpu();
+		sleep_cpu(); // ZzzZZzzz
 	}
 }

@@ -10,7 +10,7 @@
 #ifndef BAUD_TOL
   #define BAUD_TOL 2
 #endif
-#define BSIZE 64
+#define BSIZE 80
 
 
 char rdata[BSIZE];
